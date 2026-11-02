@@ -1,0 +1,106 @@
+{
+  "uid": "digit-monitoring",
+  "title": "Digit Classifier Monitoring",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total Predictions",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "targets": [{ "refId": "A", "expr": "sum(model_predictions_total)" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Model Test Accuracy",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "green" } } },
+      "targets": [{ "refId": "A", "expr": "model_test_accuracy" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Error Rate (last 1 min)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 5 },
+            { "color": "red", "value": 15 }
+          ] }
+        }
+      },
+      "targets": [{ "refId": "A", "expr": "100 * sum(rate(app_requests_total{status=~\"4..|5..\"}[1m])) / sum(rate(app_requests_total[1m]))" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Low Confidence Rate (last 1 min)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 10 },
+            { "color": "red", "value": 25 }
+          ] }
+        }
+      },
+      "targets": [{ "refId": "A", "expr": "100 * sum(rate(model_low_confidence_total[1m])) / sum(rate(model_predictions_total[1m]))" }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Requests per Second by Endpoint",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [{ "refId": "A", "expr": "sum by (endpoint) (rate(app_requests_total[1m]))", "legendFormat": "{{endpoint}}" }]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Prediction Latency (p50 and p95)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.5, sum by (le) (rate(app_request_latency_seconds_bucket{endpoint=\"/predict\"}[1m])))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(app_request_latency_seconds_bucket{endpoint=\"/predict\"}[1m])))", "legendFormat": "p95" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "bargauge",
+      "title": "Predictions by Digit",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "orientation": "vertical", "displayMode": "gradient" },
+      "targets": [{ "refId": "A", "expr": "sum by (digit) (model_predictions_total)", "legendFormat": "{{digit}}" }]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Average Prediction Confidence",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "targets": [{ "refId": "A", "expr": "sum(rate(model_prediction_confidence_sum[1m])) / sum(rate(model_prediction_confidence_count[1m]))", "legendFormat": "average confidence" }]
+    }
+  ]
+}
