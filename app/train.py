@@ -9,8 +9,10 @@ from sklearn.datasets import load_digits
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import FunctionTransformer
 from sklearn.svm import SVC
+
+from app.preprocessing import scale_pixels
 
 MODEL_DIR = Path(__file__).resolve().parent.parent / "model"
 MODEL_PATH = MODEL_DIR / "model.joblib"
@@ -24,7 +26,7 @@ def train_model(random_state=42):
     )
 
     model = Pipeline([
-        ("scaler", StandardScaler()),
+        ("scaler", FunctionTransformer(scale_pixels)),
         ("classifier", CalibratedClassifierCV(SVC(kernel="rbf"), ensemble=False)),
     ])
     model.fit(X_train, y_train)

@@ -5,9 +5,10 @@ A containerized machine learning service with live production monitoring. A hand
 ![Grafana dashboard](assets/grafana-dashboard.png)
 
 ## What It Does
-* **Serves a model:** an SVC classifier with calibrated probabilities recognizes digits 0 to 9 from 8x8 grayscale images (about 97% test accuracy).
+* **Serves a model:** an SVC classifier with calibrated probabilities recognizes digits 0 to 9 from 8x8 grayscale images (about 99% test accuracy).
 * **Tracks every request:** request counts, status codes and response times for each endpoint.
 * **Monitors model behavior:** predictions per digit, the confidence of each prediction, and how often confidence falls below 60%.
+* **Detects data drift:** tracks how many pixels in each incoming image have ink in places where training images almost never do.
 * **Shows it live:** a Grafana dashboard that refreshes every 5 seconds.
 * **Simulates real traffic:** a traffic generator can send normal requests, invalid requests and distorted images, to show how the dashboard reacts when incoming data changes.
 
@@ -87,7 +88,10 @@ Traffic where 70% of the images are distorted, to simulate a change in incoming 
 docker compose exec api python -m app.traffic --requests 300 --noise 0.7
 ```
 
-During the distorted run, the Low Confidence Rate rises and the Average Prediction Confidence drops on the dashboard.
+During the distorted run, the **Unusual Input Pixels** panel rises from about 0% to around 8%, crossing the orange and red lines.
+The Low Confidence Rate and the Average Prediction Confidence barely move. This is the point of the drift panel: the model
+stays confident even when the images look different from its training data, so model confidence alone would not
+reveal the problem. Watching the inputs does.
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -136,6 +140,7 @@ Each image is a list of 64 numbers (an 8x8 image, row by row), each from 0 (blan
 | Prediction Latency | Median (p50) and 95th percentile (p95) response time |
 | Predictions by Digit | How many times each digit was predicted |
 | Average Prediction Confidence | How sure the model is, on average |
+| Unusual Input Pixels | Average share of pixels per image that are darker than almost all training images at that spot. Near 0% for normal digits, rises when the input data changes |
 
 ## Running the Tests
 
@@ -148,7 +153,7 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-On Windows, activate the environment with `venv\Scripts\activate`. The output should end with `10 passed`. The tests check model training, every endpoint, input validation and the metrics output.
+On Windows, activate the environment with `venv\Scripts\activate`. The output should end with `11 passed`. The tests check model training, every endpoint, input validation, the metrics output, and that distorted images are not all predicted as the same digit.
 
 ## Continuous Integration
 The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and pull request to `main`, in two jobs:
@@ -162,6 +167,7 @@ model-watchtower/
 ├── .github/workflows/ci.yml          CI workflow
 ├── app/
 │   ├── main.py                       FastAPI app and Prometheus metrics
+│   ├── preprocessing.py              Pixel scaling used by the model
 │   ├── train.py                      Model training and evaluation
 │   └── traffic.py                    Traffic generator
 ├── grafana/
@@ -176,6 +182,14 @@ model-watchtower/
 ├── requirements-dev.txt              Test dependencies
 └── pytest.ini                        Test settings
 ```
+
+## Design Note: Why the Pixels Are Scaled by 16
+
+The model divides every pixel by 16 instead of using a `StandardScaler`. A few corner pixels are almost always
+blank in the training images, so a `StandardScaler` turns any ink there into a very large number. With that
+scaler, distorted images ended up far away from all training data, and the SVC labelled almost all of them as
+the digit 4 with about 89% confidence. Dividing by 16 avoids this and also raises test accuracy from 97.5% to 98.9%.
+The test `test_distorted_images_are_not_all_one_digit` checks that this does not come back.
 
 ## Troubleshooting
 * **`Cannot connect to the Docker daemon`:** open Docker Desktop and wait until it finishes starting.

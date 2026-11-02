@@ -46,6 +46,11 @@ LOW_CONFIDENCE = Counter(
     "model_low_confidence_total", "Predictions with confidence below the threshold"
 )
 MODEL_ACCURACY = Gauge("model_test_accuracy", "Test accuracy of the loaded model")
+UNUSUAL_PIXELS = Histogram(
+    "model_input_unusual_pixel_share",
+    "Share of pixels in an input image that are darker than almost all training images at that position",
+    buckets=(0.0, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1.0),
+)
 
 app = FastAPI(
     title="Digit Classifier Service",
@@ -55,6 +60,9 @@ app = FastAPI(
 
 _model = None
 _digits_X, _digits_y = load_digits(return_X_y=True)
+# For each of the 64 pixel positions, the value that 99% of the digit images stay below.
+# Ink above this level is "unusual" and is a simple sign that the incoming data has changed.
+PIXEL_LIMITS = np.percentile(_digits_X, 99, axis=0) + 0.5
 
 
 def get_model():
@@ -108,7 +116,10 @@ class Prediction(BaseModel):
 
 def predict_samples(samples):
     model = get_model()
-    probabilities = model.predict_proba(np.array(samples, dtype=float))
+    X = np.array(samples, dtype=float)
+    for share in (X > PIXEL_LIMITS).mean(axis=1):
+        UNUSUAL_PIXELS.observe(float(share))
+    probabilities = model.predict_proba(X)
     results = []
     for probs in probabilities:
         index = int(np.argmax(probs))

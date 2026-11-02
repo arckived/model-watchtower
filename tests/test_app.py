@@ -69,3 +69,17 @@ def test_metrics_exposed(client):
     assert "app_requests_total" in text
     assert "model_prediction_confidence_bucket" in text
     assert "model_test_accuracy" in text
+    assert "model_input_unusual_pixel_share_bucket" in text
+
+
+def test_distorted_images_are_not_all_one_digit(client):
+    # Regression test: with a StandardScaler, noisy images were all predicted as the same digit.
+    import random
+
+    from app.main import _digits_X
+    from app.traffic import add_noise
+
+    random.seed(0)
+    batch = [{"pixels": add_noise(_digits_X[i].tolist())} for i in range(50)]
+    digits = {p["digit"] for p in client.post("/predict-batch", json=batch).json()}
+    assert len(digits) >= 5
